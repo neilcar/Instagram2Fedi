@@ -3,7 +3,7 @@ from colorama import Fore, Back, Style
 import requests
 import time
 import datetime
-from already_posted import already_posted, mark_as_posted
+from already_posted import already_posted, mark_as_posted, already_posted_stateless
 from converters import split_array, try_to_get_carousel
 import hashlib
 from instaloader import Profile, Instaloader, LatestStamps
@@ -66,6 +66,7 @@ def toot(urls, title, mastodon, fetched_user ):
             ids.append(upload_image_to_mastodon(url, mastodon))
         post_text = str(title) + "\n"  # creating post text
         post_text = post_text[0:1000]
+        print(post_text)
         if(ids):
             print(ids)
             mastodon.status_post(post_text, media_ids = ids)
@@ -82,10 +83,14 @@ def get_new_posts(mastodon,  mastodon_carousel_size, post_limit, already_posted_
     posts = profile.get_posts()
     stupidcounter = 0
     for post in posts:
+        mastodon_account = mastodon.account_verify_credentials()
+        tag = mastodon_account.username.replace(".","_").replace("-","_") + str(post.mediaid) # - and . break hashtags in Mastodon, replacing with _
         url_arr = try_to_get_carousel([post.url], post)
         # checking only `post_limit` last posts
         if stupidcounter < post_limit:
             stupidcounter += 1
+            if already_posted_stateless(mastodon, tag, fetched_user):
+                print("Stateless check shows already posted")
             if already_posted(str(post.mediaid), already_posted_path):
                 print(Fore.YELLOW + "🐘 > Already Posted ", post.url)
                 print(Style.RESET_ALL)
@@ -96,9 +101,9 @@ def get_new_posts(mastodon,  mastodon_carousel_size, post_limit, already_posted_
             if using_mastodon:
                 urls_arr = split_array(url_arr, carousel_size)
                 for urls in urls_arr:
-                    toot(urls, post.caption, mastodon, fetched_user)
+                    toot(urls, post.caption + " #" + tag, mastodon, fetched_user)
             else:
-                toot(url_arr, post.caption, mastodon, fetched_user)
+                toot(url_arr, post.caption + " \"#" + tag +"\"", mastodon, fetched_user)
             mark_as_posted(str(post.mediaid), already_posted_path)
             time.sleep(post_interval)
         else:
